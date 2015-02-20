@@ -2,8 +2,14 @@
   PS2Communication.h - PS2Communication library
   Copyright (c) 2009 Free Software Foundation.  All right reserved.
   Rewritten for interrupt and ported for Spark Core
-  by Andreas Rothenwänder <scruff.r@sbg.at>
+  by Andreas RothenwÃ¤nder (aka ScruffR)
   based on some non-interrupt library from pjrc.com (Paul Stoffregen)
+
+  This library provides the basic PS/2 communication framework for
+  sending single byte "commands" and receiving data/responses of a
+  PS/2 device.
+  One example for communication between Spark Core and a PS/2 mouse is
+  provided along with the library.
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -101,6 +107,8 @@ class PS2Communication
     //   high .. pin becomes input with pullup resistor
     //   low  .. pin becomes output LOW
     inline void setPin(int pin, uint8_t state);
+    // in case of tight memory, squeeze out some bytes ;-)
+    //void setPin(int pin, uint8_t state);
 
   public:
     // constructor does the pin setup and attaches the interrupt

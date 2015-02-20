@@ -1,10 +1,10 @@
 /*
   PS2Mouse.cpp - read PS/2 mouse input (interrupt driven)
   Copyright (c) 2009 Andreas Rothenwänder.  All right reserved.
-  Written by Andreas Rothenwänder <scruff.r@sbg.at>
+  Written by Andreas Rothenwänder (aka ScruffR)
 
   This firmware reads PS/2 mouse reports and forwards that information via
-  Serial output.
+  Serial output and passes out cummulated values as Spark.variables
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -299,10 +299,13 @@ void ps2MouseRead()
     PS2->read();            // drop ACK (0xFA)
     // see http://www.computer-engineering.org/ps2mouse/
     mState = PS2->read() & 0x3F;  // don't care for carry flags
-    // usually this wouldn't be necessary as most mice only report -128..+127
-    // but the protocoll allows for -256..+255 plus a carry flag
-    mX = (mState & 0x10 ? 0xFF00 : 0x0000) | PS2->read();
-    mY = (mState & 0x20 ? 0xFF00 : 0x0000) | PS2->read();
+    // usually this wouldn't be necessary as most mice only report -127..+127
+    // but the protocoll allows for -255..+255 plus a carry flag
+    // -128/-256 is not allowed
+    if (mX = PS2->read())  // if read byte != 0 expand sign otherwise -256 would happen
+      mX |= (mState & 0x10 ? 0xFF00 : 0x0000);
+    if (mY |= PS2->read()) // if read byte != 0 expand sign otherwise -256 would happen
+      mY |= (mState & 0x20 ? 0xFF00 : 0x0000);
 
     if (ps2DeviceID >= 0x03)
     {
