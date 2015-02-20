@@ -27,17 +27,38 @@
 void ps2HostToDeviceCommunication(void);
 void ps2DeviceToHostCommunication(void);
 
+uint8_t _dataPin;
+uint8_t _clkPin;
+uint8_t _clkInterrupt;
+
 volatile int8_t  ps2Direction = DEV2HOST;
 volatile int8_t  ps2BitPos;          // shared between ISRs for DEV2HOST & HOST2DEV communication
 volatile uint8_t ps2InBuffer[32];
 volatile uint8_t ps2InBufferHead;
 volatile uint8_t ps2InBufferTail;
 volatile uint8_t ps2OutByte;
+volatile uint8_t ps2IgnoreResponse;
 
 volatile uint8_t state = 0;
 
-PS2Communication::PS2Communication()
+#if defined(SPARK)
+PS2Communication::PS2Communication(uint8_t dataPin,
+                                   uint8_t clkPin)
+#else
+PS2Communication::PS2Communication(uint8_t dataPin,
+                                   uint8_t clkPin,
+                                   uint8_t clkInterrupt)
+#endif
 {
+  // initialize class variables
+  _dataPin      = dataPin;
+  _clkPin       = clkPin;
+#if defined(SPARK)
+  _clkInterrupt = clkPin;
+#else
+  _clkInterrupt = clkInterrupt;
+#endif
+
   // initialize the pins
   PS2Communication::reset();
 }
@@ -50,10 +71,10 @@ void PS2Communication::begin()
 void PS2Communication::reset()
 {
   PS2Communication::suspend();
-  PS2Communication::setPin(PS2_DATAPIN, LOW);
+  PS2Communication::setPin(_dataPin, LOW);
   PS2Communication::flush();
   delayMicroseconds(10000);             // long enough for a reset?
-  PS2Communication::setPin(PS2_DATAPIN, HIGH);
+  PS2Communication::setPin(_dataPin, HIGH);
   PS2Communication::resume();
   PS2Communication::write(0xFF);
   delay(500);
@@ -72,11 +93,17 @@ uint8_t PS2Communication::read()
     return 0;
 }
 
-void PS2Communication::write(uint8_t data)
+void PS2Communication::write(uint8_t data, uint8_t ignoreResponse)
 {
   ps2OutByte = data;
+  ps2IgnoreResponse = ignoreResponse;
   PS2Communication::rts();                  // request to send
 }
+
+//void PS2Communication::write(uint8_t data)
+//{
+//  PS2Communication::write(data, false);
+//}
 
 void PS2Communication::flush()
 {
@@ -95,7 +122,7 @@ void PS2Communication::flush(int buffer)
 
 void PS2Communication::suspend()
 {
-  PS2Communication::setPin(PS2_CLKPIN, LOW);
+  PS2Communication::setPin(_clkPin, LOW);
   delayMicroseconds(100);   // at least 100 micro seconds
 }
 
@@ -105,18 +132,18 @@ void PS2Communication::resume()
   //ps2InByte =
   ps2BitPos =
   ps2OutByte = 0;
-  PS2Communication::setPin(PS2_CLKPIN, HIGH);
+  PS2Communication::setPin(_clkPin, HIGH);
 }
 
 void PS2Communication::rts()
 {
-  PS2Communication::setPin(PS2_CLKPIN, LOW);
+  PS2Communication::setPin(_clkPin, LOW);
   delayMicroseconds(100);
-  PS2Communication::setPin(PS2_DATAPIN, LOW); // produce startbit
+  PS2Communication::setPin(_dataPin, LOW); // produce startbit
   delayMicroseconds(25);
   ps2BitPos = 0;
   ps2Direction = HOST2DEV;
-  PS2Communication::setPin(PS2_CLKPIN, HIGH);
+  PS2Communication::setPin(_clkPin, HIGH);
 }
 
 inline void PS2Communication::setPin(int pin, uint8_t state)
@@ -129,21 +156,19 @@ inline void PS2Communication::setPin(int pin, uint8_t state)
     pinMode(pin, INPUT);
     pinSet(pin, HIGH);
 #endif
-    if (pin == PS2_CLKPIN)
+    if (pin == _clkPin)
     {
       ps2BitPos = 0;
-      //attachInterrupt(PS2_INTERRUPT, ps2FirstRising, RISING);
-      attachInterrupt(PS2_INTERRUPT, ps2Direction == DEV2HOST ? ps2DeviceToHostCommunication : ps2HostToDeviceCommunication, FALLING);
-      //if (ps2Direction == HOST2DEV)
-      //  attachInterrupt(PS2_INTERRUPT, ps2HostToDeviceCommunication, FALLING);
-      //else
-      //  attachInterrupt(PS2_INTERRUPT, ps2DeviceToHostCommunication, RISING);
+      attachInterrupt(_clkInterrupt, (ps2Direction == DEV2HOST)
+                                     ? ps2DeviceToHostCommunication
+                                     : ps2HostToDeviceCommunication
+                                     , FALLING);
     }
   }
   else
   {
-    if (pin == PS2_CLKPIN)
-      detachInterrupt(PS2_INTERRUPT);
+    if (pin == _clkPin)
+      detachInterrupt(_clkInterrupt);
 
     pinMode(pin, OUTPUT);
     pinSet(pin, LOW);
@@ -171,36 +196,48 @@ void ps2HostToDeviceCommunication(void)
     case 8:
       if (_Data & (0x01 << (ps2BitPos - 1)))
       {
-        pinSet(PS2_DATAPIN, HIGH);
+        pinSet(_dataPin, HIGH);
         _Parity ^= 0xFF;                     // toggle parity
       }
       else
-        pinSet(PS2_DATAPIN, LOW);
+        pinSet(_dataPin, LOW);
       break;
     case 9:   // parity
-      pinSet(PS2_DATAPIN, _Parity);    // send parity bit
+      pinSet(_dataPin, _Parity);    // send parity bit
       break;
     case 10:  // stopbit
-      pinSet(PS2_DATAPIN, HIGH);
+      pinSet(_dataPin, HIGH);
       break;
     case 11: // only for HOST2DEV: acknowledge sent by device
-      detachInterrupt(PS2_INTERRUPT);
-      pinMode(PS2_DATAPIN, INPUT);
+      detachInterrupt(_clkInterrupt);
 
-      //if (!pinGet(PS2_DATAPIN))      // if sent byte is acknowledged remove it from the buffer
+      //if (!pinGet(_dataPin))      // if sent byte is acknowledged remove it from the buffer
       //  ps2OutByte = 0;
       ps2OutByte = 0;
-
       ps2BitPos = -1;
-      ps2Direction = DEV2HOST;                // allow device to host communication again (e.g. for command result transfer)
 
-      attachInterrupt(PS2_INTERRUPT, ps2DeviceToHostCommunication, FALLING);
+      if (ps2IgnoreResponse)
+      { // abort transmission
+        pinLO(_clkPin);
+        delayMicroseconds(100);
+        pinHI(_clkPin);
+        delayMicroseconds(25);
+        pinMode(_clkPin, INPUT);
+      }
+      else
+      {
+        pinMode(_dataPin, INPUT);
+
+        ps2Direction = DEV2HOST;                // allow device to host communication again (e.g. for command result transfer)
+
+        attachInterrupt(_clkInterrupt, ps2DeviceToHostCommunication, FALLING);
+      }
       break;
     default:
-      //pinSet(PS2_DATAPIN, HIGH);
-      pinMode(PS2_DATAPIN, INPUT);
+      //pinSet(_dataPin, HIGH);
+      pinMode(_dataPin, INPUT);
       ps2BitPos = -1;
-      detachInterrupt(PS2_INTERRUPT);
+      detachInterrupt(_clkInterrupt);
   }
   ps2BitPos++;
 }
@@ -224,14 +261,14 @@ void ps2DeviceToHostCommunication(void)
     case 6:
     case 7:
     case 8:
-      if (pinGet(PS2_DATAPIN))
+      if (pinGet(_dataPin))
       {
         _Data |= (0x01 << (ps2BitPos - 1));
         _Parity ^= 0xFF;                     // toggle parity
       }
       break;
     case 9:   // parity
-      _Parity ^= pinGet(PS2_DATAPIN);   // if parity bit does meet the expectation ps2Parity is cleared
+      _Parity ^= pinGet(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
 
       // if we don't care for parity and stopbit - do it now
       if (ps2InBufferHead && ps2InBufferTail == ps2InBufferHead)
@@ -243,7 +280,7 @@ void ps2DeviceToHostCommunication(void)
       break;
     case 10:  // stopbit
       //// if we do care - wait for the stopbit and check parity
-      //if (pinGet(PS2_DATAPIN) && !_Parity)
+      //if (pinGet(_dataPin) && !_Parity)
       //{
       //  if (ps2InBufferHead && ps2InBufferTail == ps2InBufferHead)
       //    ps2InBufferTail = ps2InBufferHead = 0;
@@ -261,10 +298,10 @@ volatile uint8_t  ps2InByte;        // first version vars (can go as soon as ps2
 volatile uint8_t  ps2Parity;        //  --"--
 volatile uint16_t inByte, outByte;  //  --"--
 
-void ps2FirstRising(void)
+void PS2Communication::ps2FirstRising(void)
 {
   ps2BitPos = 0;
-  attachInterrupt(PS2_INTERRUPT, ps2Direction == DEV2HOST ? ps2DeviceToHostCommunication : ps2HostToDeviceCommunication, FALLING);
+  attachInterrupt(_clkInterrupt, ps2Direction == DEV2HOST ? ps2DeviceToHostCommunication : ps2HostToDeviceCommunication, FALLING);
 }
 
 // The ISR for the PS/2 clock falling edge
@@ -280,7 +317,7 @@ void ps2Interrupt(void)
     ps2Parity = 0xFF;       // preset parity flag
     if (ps2Direction == HOST2DEV)
     {
-      pinMode(PS2_DATAPIN, OUTPUT);
+      pinMode(_dataPin, OUTPUT);
       outByte = 0x8000;
     }
     else
@@ -298,7 +335,7 @@ void ps2Interrupt(void)
   {
     if (ps2Direction == DEV2HOST)
     {
-      if (bit = digitalRead(PS2_DATAPIN))
+      if (bit = digitalRead(_dataPin))
       {
         ps2InByte |= (0x01 << (ps2BitPos - 1));
         ps2Parity = ~ps2Parity;
@@ -310,13 +347,13 @@ void ps2Interrupt(void)
     {
       if (ps2OutByte & (0x01 << (ps2BitPos - 1)))
       {
-        pinSet(PS2_DATAPIN, HIGH);
+        pinSet(_dataPin, HIGH);
         ps2Parity = ~ps2Parity;
         outByte |= (0x01 << (ps2BitPos - 1));
       }
       else
       {
-        pinSet(PS2_DATAPIN, LOW);
+        pinSet(_dataPin, LOW);
         outByte &= ~(0x01 << (ps2BitPos - 1));
       }
     }
@@ -328,12 +365,12 @@ void ps2Interrupt(void)
     if (ps2Direction == DEV2HOST)
     {
       inByte |= (ps2Parity << 15);
-      ps2Parity ^= digitalRead(PS2_DATAPIN);   // if parity bit does meet the expectation ps2Parity is cleared
+      ps2Parity ^= digitalRead(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
     }
     else //if (ps2Direction == HOST2DEV)
     {
       outByte |= (ps2Parity << 14);
-      pinSet(PS2_DATAPIN, ps2Parity);    // send parity bit
+      pinSet(_dataPin, ps2Parity);    // send parity bit
     }
     break;
   }
@@ -352,17 +389,17 @@ void ps2Interrupt(void)
     else //if (ps2Direction == HOST2DEV)
     {
       #if defined(SPARK)
-      pinMode(PS2_DATAPIN, INPUT_PULLUP);
+      pinMode(_dataPin, INPUT_PULLUP);
       #else
-      pinMode(PS2_DATAPIN, INPUT);
-      pinSet(PS2_DATAPIN, HIGH);
+      pinMode(_dataPin, INPUT);
+      pinSet(_dataPin, HIGH);
       #endif
     }
     break;
   }
   case 11: // only for HOST2DEV: acknowledge sent by device
   {
-    //      if (digitalRead(PS2_DATAPIN) == LOW)      // if sent byte is acknowledged remove it from the buffer
+    //      if (digitalRead(_dataPin) == LOW)      // if sent byte is acknowledged remove it from the buffer
     //        ps2OutByte = 0;
 
     ps2BitPos = -1;
@@ -375,10 +412,10 @@ void ps2Interrupt(void)
     ps2BitPos = -1;
     ps2Direction = DEV2HOST;                // allow device to host communication again (e.g. for command result transfer)
     #if defined(SPARK)
-    pinMode(PS2_DATAPIN, INPUT_PULLUP);
+    pinMode(_dataPin, INPUT_PULLUP);
     #else
-    pinMode(PS2_DATAPIN, INPUT);
-    pinSet(PS2_DATAPIN, HIGH);
+    pinMode(_dataPin, INPUT);
+    pinSet(_dataPin, HIGH);
     #endif
     break;
   }

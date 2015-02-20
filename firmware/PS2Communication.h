@@ -53,6 +53,7 @@
 #define bitRead(_val, _bit)                (_val & (1 << _bit))
 #define bitWrite(_dest, _bit, _src)        (_dest |= (_src ? (1 << _bit) : 0))
 
+// default values
 #define PS2_DATAPIN D0        // needs to be 5V toletant
 #define PS2_CLKPIN  D1        // needs to be 5V tolerant & interrupt enabled
 
@@ -68,9 +69,9 @@
 #define pinSet(_pin, _hilo)                digitalWrite(_pin, _hilo)
 #define pinGet(_pin)                       digitalRead(_pin)
 
-// PIN for pin change interrupt PCINT0
+// default PIN for pin change interrupt PCINT0
 //#define PS2_CLKPIN 3        // for arduino
-//#define PS2_DATAPIN 10
+//#define _dataPin 10
 #define PS2_CLKPIN  PIN_D1  // Teensy 1.0
 #define PS2_DATAPIN PIN_B0  // Teensy 1.0
 
@@ -79,11 +80,15 @@
 
 #endif
 
-#define WAIT4PS2REPLY  50               // time to transmit a PS2 "byte"
+#define WAIT4PS2REPLY  3            // time to transmit a PS2 "byte" [ms]
 
 // direction of communication
 #define DEV2HOST 0
 #define HOST2DEV -1
+
+extern uint8_t _dataPin;
+extern uint8_t _clkPin;
+extern uint8_t _clkInterrupt;
 
 extern volatile uint8_t ps2InBufferHead;
 extern volatile uint8_t ps2InBufferTail;
@@ -91,15 +96,24 @@ extern volatile uint16_t inByte, outByte;
 
 class PS2Communication
 {
-private:
+  private:
     // sets the line states for clock or data
     //   high .. pin becomes input with pullup resistor
     //   low  .. pin becomes output LOW
     inline void setPin(int pin, uint8_t state);
 
-public:
+  public:
     // constructor does the pin setup and attaches the interrupt
-  	PS2Communication();
+    // for Spark Core
+    // pins need to be 5V tolerant & clkPin needs to be interrupt enabled
+#if defined(SPARK)
+  PS2Communication(uint8_t dataPin      = PS2_DATAPIN,
+                   uint8_t clkPin       = PS2_CLKPIN);
+#else
+  	PS2Communication(uint8_t dataPin      = PS2_DATAPIN,
+                     uint8_t clkPin       = PS2_CLKPIN,
+                     uint8_t clkInterrupt = PS2_INTERRUPT);
+#endif
 
     // does the pin setup and attaches the interrupt via reset()
     void begin();
@@ -111,7 +125,8 @@ public:
     uint8_t read();
 
     // sends one byte to the PS/2 device
-    void write(uint8_t cmd);
+    void write(uint8_t data, uint8_t ignoreResponse = false);
+    //void write(uint8_t cmd);
 
     // flush the in/out buffers
     void flush();

@@ -23,12 +23,18 @@
 
 #include "PS2Communication/PS2Communication.h"
 
-SYSTEM_MODE(MANUAL);
+//SYSTEM_MODE(MANUAL);
 
-#define DEBUG_PS2
+#define xDEBUG_PS2
 #define DEBUG_DO_MOUSE
 
-#define REPEATTIME    100
+#if defined DEBUG_PS2
+#define PS2IGNORE FALSE
+#else
+#define PS2IGNORE TRUE
+#endif
+
+#define REPEATTIME     100
 #define BUFLEN         32
 
 PS2Communication* PS2 = NULL;
@@ -49,13 +55,22 @@ char echo[8] = {'\0'};
 int  echoLen = 0;
 long l;
 
+// mouse values for Spark.variables
+char mouseB[] = "_lmr_";
+int mouseX = 0x00;
+int mouseY = 0x00;
+int mouseZ = 0x00;
+int mouseReset(String cmd);
+
 void setup()
 {
-  pinMode(D7, OUTPUT);
+  Spark.variable("MouseButtons", mouseB, STRING);
+  Spark.variable("MouseX", &mouseX, INT);
+  Spark.variable("MouseY", &mouseY, INT);
+  Spark.variable("MouseZ", &mouseZ, INT);
+  Spark.function("MouseReset", mouseReset);
 
   memset(buffer, 0, BUFLEN);            // clear buffer
-
-  PS2 = new PS2Communication();
 
 #if defined(DEBUG_PS2) || defined(DEBUG_DO_MOUSE)
    // USB bridge for debug information
@@ -64,7 +79,12 @@ void setup()
   ps2LastRead = millis();
   while(!Serial.available() && millis() - ps2LastRead < 10000)
     SPARK_WLAN_Loop();
+#else
+  delay(2000); // time for PS/2 mouse to settle in
 #endif
+
+  // dataPin D0, clkPin D1
+  PS2 = new PS2Communication(D0, D1);
 
   ps2MouseInit();
 
@@ -82,9 +102,13 @@ void loop()
     }
   }
 
+#if defined(DEBUG_PS2) || defined(DEBUG_DO_MOUSE)
+  // here you can send test bytes to the PS/2 mouse, which will be echoed
+  // back (except 0xFF .. reset & 0xEC .. end echo for response test)
+  // or enter X to switch into dfu-mode
+
   while (Serial.available())
     Serial.write(echo[echoLen++] = Serial.read());
-
   echo[echoLen] = '\0';
 
   if (echoLen == 7 || echo[echoLen-1] == '\n' || echo[echoLen-1] == '\r')
@@ -93,9 +117,10 @@ void loop()
     Serial.println("-----");
     echoLen = 0;
 
+    // Beware! You need to flash firmware via USB (dfu-util) after this
     if (echo[0] == 'X')
-    {                       // enter dfu
-      delay(5000);          // give us some time to close serial monitor
+    {                        // enter dfu
+      delay(5000);           // give us some time to close serial monitor
       FLASH_OTA_Update_SysFlag = 0x0000;
       Save_SystemFlags();
       BKP_WriteBackupRegister(BKP_DR10, 0x0000);
@@ -106,12 +131,12 @@ void loop()
     l = strtol(echo, NULL, 16);
     if (l > 0 && !bEcho)
     {
-      PS2->write(0xEE);    // enable  Wrap Mode (echo back each byte from host)
+      PS2->write(0xEE);      // enable  Wrap Mode (echo back each byte from host)
       //PS2->write(0xEC);    // disable Wrap Mode (echo back each byte from host)
       delay(WAIT4PS2REPLY);
       bEcho = TRUE;
     }
-    else if (l == 0xFF) // || 0xEC)
+    else if (l == 0xFF)
     {
       bEcho = FALSE;
       l = 0;
@@ -131,54 +156,53 @@ void loop()
       Serial.println("^^^^^");
     }
   }
+#endif
 }
 
-inline void dump()
+void dumpACK()
 {
-  /*
+  delay(WAIT4PS2REPLY);
+
+#if defined(DEBUG_PS2)
   uint8_t r;
 
+  delay(WAIT4PS2REPLY);
   while (PS2->available())
   {
+    delay(WAIT4PS2REPLY);
     if (r = PS2->read())
       Serial.println(r, HEX);
     else
       Serial.println("NULL");
   }
   Serial.println("-----");
-  */
+#endif
 }
 
 void ps2MouseInit()
 {
   PS2->reset();
-  delay(5 * WAIT4PS2REPLY);   // wait reset to finish
+  delay(5 * WAIT4PS2REPLY);  // wait reset to finish
 
 Serial.println("5button");
   // try to set as 5 button scroll mouse (magic sample rate sequence 200, 200, 80)
-  PS2->write(0xF3);           // set sample rate
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply (1 send + 1 receive)
-dump();
-  PS2->write(200);  // 0xC8
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-  PS2->write(0xF3);
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-  PS2->write(200);  // 0xC8
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-  PS2->write(0xF3);
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-  PS2->write(80);   // 0x50
-  delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
+  PS2->write(0xF3, PS2IGNORE);   // set sample rate
+  dumpACK();                     // allow time for reply (1 send + 1 receive)
+  PS2->write(200, PS2IGNORE);    // 0xC8
+  dumpACK();
+  PS2->write(0xF3, PS2IGNORE);
+  dumpACK();
+  PS2->write(200, PS2IGNORE);    // 0xC8
+  dumpACK();
+  PS2->write(0xF3, PS2IGNORE);
+  dumpACK();
+  PS2->write(80, PS2IGNORE);     // 0x50
+  dumpACK();
   PS2->flush();
 
-  PS2->write(0xF2);           // now get device ID
-  delay(3 * WAIT4PS2REPLY);   // allow time for reply ( 1 send + 2 receive)
-  PS2->read();                // drop ACK
+  PS2->write(0xF2);              // now get device ID
+  delay(3 * WAIT4PS2REPLY);      // allow time for reply ( 1 send + 2 receive)
+  PS2->read();                   // drop ACK
   ps2DeviceID = PS2->read();
 
   if (ps2DeviceID != 0x04)
@@ -187,33 +211,27 @@ dump();
 
 Serial.println("3button");
     // try to set as 3 button scroll mouse (magic sample rate sequence 200, 100, 80)
-    PS2->write(0xF3);           // set sample rate
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->write(200);            // 0x200
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->write(0xF3);
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->write(100);            // 0x64
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->write(0xF3);
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->write(80);             // 0x50
-    delay(2 * WAIT4PS2REPLY);   // allow time for reply
-dump();
-    PS2->flush();               // drop all ACKs
+    PS2->write(0xF3, PS2IGNORE); // set sample rate
+    dumpACK();                   // allow time for reply (1 send + 1 receive)
+    PS2->write(200, PS2IGNORE);  // 0xC8
+    dumpACK();
+    PS2->write(0xF3, PS2IGNORE);
+    dumpACK();
+    PS2->write(100, PS2IGNORE);  // 0x64
+    dumpACK();
+    PS2->write(0xF3, PS2IGNORE);
+    dumpACK();
+    PS2->write(80, PS2IGNORE);   // 0x50
+    dumpACK();
+    PS2->flush();                // drop all ACKs
 
-    PS2->write(0xF2);           // now get device ID
-    delay(3 * WAIT4PS2REPLY);   // allow time for reply
-    PS2->read();                // drop ACK
+    PS2->write(0xF2);            // now get device ID
+    delay(3 * WAIT4PS2REPLY);    // allow time for reply
+    PS2->read();                 // drop ACK
     ps2DeviceID = PS2->read();
   }
 
-#ifdef DEBUG_PS2
+#ifdef DEBUG_DO_MOUSE
   switch (ps2DeviceID)
   {
     case 0x00:
@@ -234,83 +252,90 @@ dump();
 #endif
 
   delay(WAIT4PS2REPLY);
-  PS2->flush();        // drop all ACKs
+  PS2->flush();                  // drop all ACKs
 
-  PS2->write(0xF3);    // set sample rate
-  delay(2 * WAIT4PS2REPLY);
-dump();
-  PS2->write(50);      // 50 samples per second
-  delay(2 * WAIT4PS2REPLY);
-dump();
-  PS2->write(0xE8);    // set resolution
-  delay(2 * WAIT4PS2REPLY);
-dump();
-  PS2->write(0x02);    // 4 counts per mm
-  delay(2 * WAIT4PS2REPLY);
-dump();
+  PS2->write(0xF3, PS2IGNORE);   // set sample rate
+  dumpACK();
+  PS2->write(50, PS2IGNORE);     // 50 samples per second
+  dumpACK();
+  PS2->write(0xE8, PS2IGNORE);   // set resolution
+  dumpACK();
+  PS2->write(0x02, PS2IGNORE);   // 4 counts per mm
+  dumpACK();
 
-  //PS2->write(0xEA);    // set stream mode (should be default anyway)
-  //delay(WAIT4PS2REPLY);
-  //PS2->write(0xF4);    // enable reporting for stream mode
-  //delay(WAIT4PS2REPLY);
+  //PS2->write(0xEA, PS2IGNORE);   // set stream mode (should be default anyway)
+  //dumpACK();
+  //PS2->write(0xF4, PS2IGNORE);   // enable reporting for stream mode
+  //dumpACK();
 
-  PS2->write(0xF0);    // remote mode (mouse needs to be asked for data)
-  delay(2 * WAIT4PS2REPLY);
-dump();
+  PS2->write(0xF0, PS2IGNORE);   // remote mode (mouse needs to be asked for data)
+  dumpACK();
 
-  //PS2->write(0xEE);    // enable  Wrap Mode (echo back each byte from host)
-  //delay(2 * WAIT4PS2REPLY);
-  //PS2->write(0xEC);    // disable Wrap Mode (echo back each byte from host)
-  //delay(2 * WAIT4PS2REPLY);
+  //PS2->write(0xEE, PS2IGNORE);   // enable  Wrap Mode (echo back each byte from host)
+  //dumpACK();
+  //PS2->write(0xEC, PS2IGNORE);   // disable Wrap Mode (echo back each byte from host)
+  //dumpACK();
 
   PS2->flush();
 }
 
 void ps2MouseRead()
 {
-  uint8_t mState = 0x00;
-  int16_t  mX = 0x00;
-  int16_t  mY = 0x00;
-  int8_t  mZ = 0x00;
+  uint8_t  mState  = 0x00;
+  int16_t  mX      = 0x00;
+  int16_t  mY      = 0x00;
+  int8_t   mZ      = 0x00;
+  char     cB45    = ' ';  // place holder for button 4 & 5 if available
+  uint8_t  cnt     = (ps2DeviceID < 0x03 ? 4 : 5); // how many bytes to expect
+  uint32_t timeout = millis();
 
   PS2->flush();
 
   // get a mouse report
   PS2->write(0xEB);          // give me data!
-  delay(5 * WAIT4PS2REPLY);
-  if (PS2->available())
+  while (PS2->available() < cnt && millis() - timeout < 10 * WAIT4PS2REPLY);
+  if (PS2->available() == cnt)
   {
     PS2->read();            // drop ACK (0xFA)
     // see http://www.computer-engineering.org/ps2mouse/
-    mState = PS2->read();
-    mX = (mState & 0x10 ? 0xF0 : 0x00) | PS2->read();
-    mY = (mState & 0x20 ? 0xF0 : 0x00) | PS2->read();
+    mState = PS2->read() & 0x3F;  // don't care for carry flags
+    // usually this wouldn't be necessary as most mice only report -128..+127
+    // but the protocoll allows for -256..+255 plus a carry flag
+    mX = (mState & 0x10 ? 0xFF00 : 0x0000) | PS2->read();
+    mY = (mState & 0x20 ? 0xFF00 : 0x0000) | PS2->read();
 
-    if (ps2DeviceID == 0x03 || ps2DeviceID == 0x04)
+    if (ps2DeviceID >= 0x03)
     {
-      delay(WAIT4PS2REPLY);
       mZ = PS2->read();
-      mZ |= (mZ & 0x80) ? 0xF0 : 0x00;  // expand sign & forget other info
+      mState |= (mZ & 0x30) << 2; // place button 4 & 5 in state byte
+      mZ |= (mZ & 0x08) ? 0xFFF0 : 0x0000;  // expand sign & forget other info
       // more info at http://www.computer-engineering.org/ps2mouse/
+      if (ps2DeviceID == 0x04)
+        cB45 = '_';
     }
+
+    mouseX += (int)mX;
+    mouseY += (int)mY;
+    mouseZ += (int)mZ;
+    sprintf(mouseB, "%c%c%c%c%c", mState & 0x80 ? '4' : cB45
+                                , mState & 0x01 ? 'L' : 'l'
+                                , mState & 0x04 ? 'M' : 'm'
+                                , mState & 0x02 ? 'R' : 'r'
+                                , mState & 0x40 ? '5' : cB45);
 
     // with USB_HID_Mouse this could be passed on to a computer
     //if (mX || mY || (mZ & 0x0F))
     //  Mouse.move(mX, -mY, -mZ);
 
-    if (mState != lastMouseState)
-    {
-      lastMouseState = mState;
-      //Mouse.set_buttons(mState & 0x01, mState & 0x04, mState & 0x02);
-    }
-
-#ifdef DEBUG_PS2
+#ifdef DEBUG_DO_MOUSE
     if (mX != 0 || mY != 0 || mZ != 0 || mState != lastMouseState)
     {
       // send the data back up
       Serial.println();
-      Serial.print(mState & 0x07, BIN);
-      Serial.print("\tX=");
+      Serial.print(mouseB);
+      Serial.print(" (");
+      Serial.print(mState & 0x0F, BIN);
+      Serial.print(")\tX=");
       Serial.print(mX, DEC);
       Serial.print("\tY=");
       Serial.print(mY, DEC);
@@ -319,6 +344,12 @@ void ps2MouseRead()
       Serial.println();
     }
 #endif
+
+    if (mState != lastMouseState)
+    {
+      lastMouseState = mState;
+      //Mouse.set_buttons(mState & 0x01, mState & 0x04, mState & 0x02);
+    }
   }
   else
   {
@@ -327,4 +358,13 @@ void ps2MouseRead()
     Serial.print(".");
 #endif
   }
+}
+
+int mouseReset(String cmd)
+{
+  mouseX =
+  mouseY =
+  mouseZ = 0;
+
+  return 0;
 }
