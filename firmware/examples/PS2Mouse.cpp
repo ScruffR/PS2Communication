@@ -21,7 +21,13 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#define SPARK_WEB_IDE   // this would be nice to be provided by Spark ;-)
+
+#if defined(SPARK_WEB_IDE)
 #include "PS2Communication/PS2Communication.h"
+#else
+#include "PS2Communication.h"
+#endif
 
 //SYSTEM_MODE(MANUAL);
 
@@ -304,14 +310,16 @@ void ps2MouseRead()
     // -128/-256 is not allowed
     if (mX = PS2->read())  // if read byte != 0 expand sign otherwise -256 would happen
       mX |= (mState & 0x10 ? 0xFF00 : 0x0000);
-    if (mY |= PS2->read()) // if read byte != 0 expand sign otherwise -256 would happen
+    if (mY = PS2->read())  // if read byte != 0 expand sign otherwise -256 would happen
       mY |= (mState & 0x20 ? 0xFF00 : 0x0000);
 
     if (ps2DeviceID >= 0x03)
     {
       mZ = PS2->read();
       mState |= (mZ & 0x30) << 2; // place button 4 & 5 in state byte
-      mZ |= (mZ & 0x08) ? 0xFFF0 : 0x0000;  // expand sign & forget other info
+      mZ &= 0x0F;                 // clear other info
+      if (mZ & 0x08)              // expand sign if required
+        mZ |=  0xFFF0;
       // more info at http://www.computer-engineering.org/ps2mouse/
       if (ps2DeviceID == 0x04)
         cB45 = '_';
