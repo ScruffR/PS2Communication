@@ -1,7 +1,7 @@
 {
 	"name": "PS2Communication",
 	"author": "ScruffR",
-	"version": "0.0.2",
+	"version": "0.0.3",
 	"license": "GNU Lesser General Public License",
 	"description": "Basic PS/2 communication framework"
 }

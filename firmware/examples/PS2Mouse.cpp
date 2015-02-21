@@ -328,11 +328,11 @@ void ps2MouseRead()
     mouseX += (int)mX;
     mouseY += (int)mY;
     mouseZ += (int)mZ;
-    sprintf(mouseB, "%c%c%c%c%c", mState & 0x80 ? '4' : cB45
+    sprintf(mouseB, "%c%c%c%c%c", mState & 0x40 ? '4' : cB45
                                 , mState & 0x01 ? 'L' : 'l'
                                 , mState & 0x04 ? 'M' : 'm'
                                 , mState & 0x02 ? 'R' : 'r'
-                                , mState & 0x40 ? '5' : cB45);
+                                , mState & 0x80 ? '5' : cB45);
 
     // with USB_HID_Mouse this could be passed on to a computer
     //if (mX || mY || (mZ & 0x0F))
