@@ -39,7 +39,7 @@ uint8_t _clkInterrupt;
 
 volatile int8_t  ps2Direction = DEV2HOST;
 volatile int8_t  ps2BitPos;          // shared between ISRs for DEV2HOST & HOST2DEV communication
-volatile uint8_t ps2InBuffer[32];
+volatile uint8_t ps2InBuffer[PS2BUFFER];
 volatile uint8_t ps2InBufferHead;
 volatile uint8_t ps2InBufferTail;
 volatile uint8_t ps2OutByte;
@@ -88,15 +88,20 @@ void PS2Communication::reset()
 
 uint8_t PS2Communication::available()
 {
-  return ps2InBufferHead - ps2InBufferTail;
+	return (PS2BUFFER + ps2InBufferHead - ps2InBufferTail) % PS2BUFFER;
 }
 
 uint8_t PS2Communication::read()
 {
-  if (ps2InBufferHead > ps2InBufferTail)
-    return ps2InBuffer[ps2InBufferTail++];
-  else
-    return 0;
+  uint8_t r = 0;
+
+	if (ps2InBufferHead != ps2InBufferTail)
+	{
+		r = ps2InBuffer[ps2InBufferTail++];
+		ps2InBufferTail %= PS2BUFFER;
+	}
+
+  return r;
 }
 
 void PS2Communication::write(uint8_t data, uint8_t ignoreResponse)
@@ -104,6 +109,7 @@ void PS2Communication::write(uint8_t data, uint8_t ignoreResponse)
   ps2OutByte = data;
   ps2IgnoreResponse = ignoreResponse;
   PS2Communication::rts();                  // request to send
+  delay(WAIT4PS2REPLY);
 }
 
 //void PS2Communication::write(uint8_t data)
@@ -279,21 +285,27 @@ void ps2DeviceToHostCommunication(void)
       _Parity ^= pinGet(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
 
       // if we don't care for parity and stopbit - do it now
-      if (ps2InBufferHead && ps2InBufferTail == ps2InBufferHead)
-        ps2InBufferTail = ps2InBufferHead = 0;
 
       //if (!_Parity)  // don't care about parity ;-)
-      ps2InBuffer[ps2InBufferHead++] = _Data;
-
+      {
+        uint8_t i = (ps2InBufferHead + 1) % PS2BUFFER;
+	      if (i != ps2InBufferTail)
+	      {
+		      ps2InBuffer[ps2InBufferHead] = _Data;
+		      ps2InBufferHead = i;
+	      }
+      }
       break;
     case 10:  // stopbit
       //// if we do care - wait for the stopbit and check parity
       //if (pinGet(_dataPin) && !_Parity)
       //{
-      //  if (ps2InBufferHead && ps2InBufferTail == ps2InBufferHead)
-      //    ps2InBufferTail = ps2InBufferHead = 0;
-      //
-      //  ps2InBuffer[ps2InBufferHead++] = _Data;
+      //  uint8_t i = (ps2InBufferHead + 1) % PS2BUFFER;
+      //  if (i != ps2InBufferTail)
+      //  {
+      //    ps2InBuffer[ps2InBufferHead] = _Data;
+      //    ps2InBufferHead = i;
+      //  }
       //}
     default:
       ps2BitPos = -1;

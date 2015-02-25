@@ -61,7 +61,9 @@
 
 // default values
 #define PS2_DATAPIN D0        // needs to be 5V toletant
+                              // D0, D1, D3, D4, D5, D6 and D7
 #define PS2_CLKPIN  D1        // needs to be 5V tolerant & interrupt enabled
+                              // D0, D1, D3 and D4
 
 // interrupt for PS/2 communication
 #define PS2_INTERRUPT PS2_CLKPIN
@@ -86,6 +88,7 @@
 
 #endif
 
+#define PS2BUFFER     64
 #define WAIT4PS2REPLY  3            // time to transmit a PS2 "byte" [ms]
 
 // direction of communication
@@ -112,8 +115,12 @@ class PS2Communication
 
   public:
     // constructor does the pin setup and attaches the interrupt
-    // for Spark Core
-    // pins need to be 5V tolerant & clkPin needs to be interrupt enabled
+    //   for Spark Core direct connection
+    //   pins need to be 5V tolerant & clkPin needs to be interrupt enabled
+    //   5V toletant D0, D1, D3, D4, D5, D6 and D7
+    //   of which D0, D1, D3 and D4 also support HW interrupts
+    //   with level shifting all GPIO pins can be used for data and
+    //   D0, D1, D2, D3, D4, A0, A1, A3, A4, A5, A6 and A7 for clock
 #if defined(SPARK)
   PS2Communication(uint8_t dataPin      = PS2_DATAPIN,
                    uint8_t clkPin       = PS2_CLKPIN);
