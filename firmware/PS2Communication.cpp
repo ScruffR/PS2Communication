@@ -43,7 +43,6 @@ volatile uint8_t ps2InBuffer[PS2BUFFER];
 volatile uint8_t ps2InBufferHead;
 volatile uint8_t ps2InBufferTail;
 volatile uint8_t ps2OutByte;
-volatile uint8_t ps2IgnoreResponse;
 
 volatile uint8_t state = 0;
 
@@ -104,10 +103,9 @@ uint8_t PS2Communication::read()
   return r;
 }
 
-void PS2Communication::write(uint8_t data, uint8_t ignoreResponse)
+void PS2Communication::write(uint8_t data)
 {
   ps2OutByte = data;
-  ps2IgnoreResponse = ignoreResponse;
   PS2Communication::rts();                  // request to send
   delay(WAIT4PS2REPLY);
 }
@@ -230,6 +228,7 @@ void ps2HostToDeviceCommunication(void)
       ps2OutByte = 0;
       ps2BitPos = -1;
 
+      /* experimental
       if (ps2IgnoreResponse)
       { // abort transmission
         pinLO(_clkPin);
@@ -239,6 +238,7 @@ void ps2HostToDeviceCommunication(void)
         pinMode(_clkPin, INPUT);
       }
       else
+      */
       {
         pinMode(_dataPin, INPUT);
 

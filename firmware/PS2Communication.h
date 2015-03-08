@@ -140,8 +140,7 @@ class PS2Communication
     uint8_t read();
 
     // sends one byte to the PS/2 device
-    void write(uint8_t data, uint8_t ignoreResponse = false);
-    //void write(uint8_t cmd);
+    void write(uint8_t data);
 
     // flush the in/out buffers
     void flush();
