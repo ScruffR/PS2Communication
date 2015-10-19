@@ -501,13 +501,13 @@ void doDebugging()
     {                        // enter dfu
       Serial.println("Disconnect serial monitor - prepare for DFU");
       delay(5000);           // give us some time to close serial monitor
-      #if (SYSTEM_VERSION < 0x00040400)
+      #if (PLATFORM_ID == 0) && (SYSTEM_VERSION < 0x00040400)
        FLASH_OTA_Update_SysFlag = 0x0000;
        Save_SystemFlags();
        BKP_WriteBackupRegister(BKP_DR10, 0x0000);
        USB_Cable_Config(DISABLE);
        NVIC_SystemReset();
-      #else
+      #elif (SYSTEM_VERSION >= 0x00040400)
        System.dfu();
       #endif
     }
