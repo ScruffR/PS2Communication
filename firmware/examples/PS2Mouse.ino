@@ -128,7 +128,8 @@ void setup()
   // dataPin D0, clkPin D1
   PS2 = new PS2Communication(D0, D1);
 
-  ps2MouseMode = ps2MouseInit();
+  if ((ps2MouseMode = ps2MouseInit(mmDefault)) != mmDefault)
+    connectCloud();  // without PS/2 mouse you'll need the cloud ;-)
 
   ps2LastRead = millis();
 }
@@ -345,7 +346,7 @@ void ps2ProcessMouseReport()
   int8_t   mZ      = 0x00;
   char     cB45    = ' ';  // place holder for button 4 & 5 if available
 
-  pinHI(D7);
+  pinSetFast(D7);
 
   // see http://www.computer-engineering.org/ps2mouse/
   mState = PS2->read() & 0x3F;  // don't care for carry flags
@@ -419,7 +420,7 @@ void ps2ProcessMouseReport()
 #endif
   lastMouseState = mState;
 
-  pinLO(D7);
+  pinResetFast(D7);
 }
 
 // -------------              Spark.functions              -------------
@@ -487,6 +488,13 @@ void doDebugging()
     Serial.println(echo);
     Serial.println("-----");
     echoLen = 0;
+
+    // Spark.connect()
+    if (echo[0] == 'S' || echo[0] == 's')
+    {
+      connectCloud();
+      return;
+    }
 
     // Beware! You need to flash firmware via USB (dfu-util) after this
     if (echo[0] == 'X')

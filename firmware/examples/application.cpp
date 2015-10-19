@@ -406,7 +406,7 @@ void ps2ProcessMouseReport()
   int8_t   mZ      = 0x00;
   char     cB45    = ' ';  // place holder for button 4 & 5 if available
 
-  pinHI(D7);
+  pinSetFast(D7);
 
   // see http://www.computer-engineering.org/ps2mouse/
   mState = PS2->read() & 0x3F;  // don't care for carry flags
@@ -481,7 +481,7 @@ void ps2ProcessMouseReport()
   }
 #endif
 
-  pinLO(D7);
+  pinResetFast(D7);
 }
 
 // -------------              Spark.functions              -------------
