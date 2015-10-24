@@ -128,7 +128,8 @@ void setup()
   // dataPin D0, clkPin D1
   PS2 = new PS2Communication(D0, D1);
 
-  ps2MouseMode = ps2MouseInit();
+  if ((ps2MouseMode = ps2MouseInit(mmDefault)) != mmDefault)
+    connectCloud();  // without PS/2 mouse you'll need the cloud ;-)
 
   ps2LastRead = millis();
 }
@@ -487,6 +488,13 @@ void doDebugging()
     Serial.println(echo);
     Serial.println("-----");
     echoLen = 0;
+
+    // Spark.connect()
+    if (echo[0] == 'S' || echo[0] == 's')
+    {
+      connectCloud();
+      return;
+    }
 
     // Beware! You need to flash firmware via USB (dfu-util) after this
     if (echo[0] == 'X')
