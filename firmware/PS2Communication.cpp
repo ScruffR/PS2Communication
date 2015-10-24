@@ -44,7 +44,7 @@ volatile uint8_t ps2InBufferHead;
 volatile uint8_t ps2InBufferTail;
 volatile uint8_t ps2OutByte;
 
-volatile uint8_t state = 0;
+//volatile uint8_t ps2State = 0;
 
 #if defined(SPARK)
 PS2Communication::PS2Communication(uint8_t dataPin,
@@ -166,7 +166,7 @@ inline void PS2Communication::setPin(int pin, uint8_t state)
     pinMode(pin, INPUT_PULLUP);
 #else
     pinMode(pin, INPUT);
-    pinSet(pin, HIGH);
+    digitalWriteFast(pin, HIGH);
 #endif
     if (pin == _clkPin)
     {
@@ -183,7 +183,7 @@ inline void PS2Communication::setPin(int pin, uint8_t state)
       detachInterrupt(_clkInterrupt);
 
     pinMode(pin, OUTPUT);
-    pinSet(pin, LOW);
+    digitalWriteFast(pin, LOW);
   }
 }
 
@@ -208,22 +208,22 @@ void ps2HostToDeviceCommunication(void)
     case 8:
       if (_Data & (0x01 << (ps2BitPos - 1)))
       {
-        pinSet(_dataPin, HIGH);
+        digitalWriteFast(_dataPin, HIGH);
         _Parity ^= 0xFF;                     // toggle parity
       }
       else
-        pinSet(_dataPin, LOW);
+        digitalWriteFast(_dataPin, LOW);
       break;
     case 9:   // parity
-      pinSet(_dataPin, _Parity);    // send parity bit
+      digitalWriteFast(_dataPin, _Parity);    // send parity bit
       break;
     case 10:  // stopbit
-      pinSet(_dataPin, HIGH);
+      digitalWriteFast(_dataPin, HIGH);
       break;
     case 11: // only for HOST2DEV: acknowledge sent by device
       detachInterrupt(_clkInterrupt);
 
-      //if (!pinGet(_dataPin))      // if sent byte is acknowledged remove it from the buffer
+      //if (!pinReadFast(_dataPin))      // if sent byte is acknowledged remove it from the buffer
       //  ps2OutByte = 0;
       ps2OutByte = 0;
       ps2BitPos = -1;
@@ -231,9 +231,9 @@ void ps2HostToDeviceCommunication(void)
       /* experimental
       if (ps2IgnoreResponse)
       { // abort transmission
-        pinLO(_clkPin);
+        pinResetFast(_clkPin);
         delayMicroseconds(100);
-        pinHI(_clkPin);
+        pinSetFast(_clkPin);
         delayMicroseconds(25);
         pinMode(_clkPin, INPUT);
       }
@@ -248,7 +248,7 @@ void ps2HostToDeviceCommunication(void)
       }
       break;
     default:
-      //pinSet(_dataPin, HIGH);
+      //digitalWriteFast(_dataPin, HIGH);
       pinMode(_dataPin, INPUT);
       ps2BitPos = -1;
       detachInterrupt(_clkInterrupt);
@@ -275,14 +275,14 @@ void ps2DeviceToHostCommunication(void)
     case 6:
     case 7:
     case 8:
-      if (pinGet(_dataPin))
+      if (pinReadFast(_dataPin))
       {
         _Data |= (0x01 << (ps2BitPos - 1));
         _Parity ^= 0xFF;                     // toggle parity
       }
       break;
     case 9:   // parity
-      _Parity ^= pinGet(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
+      _Parity ^= pinReadFast(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
 
       // if we don't care for parity and stopbit - do it now
 
@@ -298,7 +298,7 @@ void ps2DeviceToHostCommunication(void)
       break;
     case 10:  // stopbit
       //// if we do care - wait for the stopbit and check parity
-      //if (pinGet(_dataPin) && !_Parity)
+      //if (pinReadFast(_dataPin) && !_Parity)
       //{
       //  uint8_t i = (ps2InBufferHead + 1) % PS2BUFFER;
       //  if (i != ps2InBufferTail)
@@ -367,13 +367,13 @@ void ps2Interrupt(void)
     {
       if (ps2OutByte & (0x01 << (ps2BitPos - 1)))
       {
-        pinSet(_dataPin, HIGH);
+        digitalWriteFast(_dataPin, HIGH);
         ps2Parity = ~ps2Parity;
         outByte |= (0x01 << (ps2BitPos - 1));
       }
       else
       {
-        pinSet(_dataPin, LOW);
+        digitalWriteFast(_dataPin, LOW);
         outByte &= ~(0x01 << (ps2BitPos - 1));
       }
     }
@@ -390,7 +390,7 @@ void ps2Interrupt(void)
     else //if (ps2Direction == HOST2DEV)
     {
       outByte |= (ps2Parity << 14);
-      pinSet(_dataPin, ps2Parity);    // send parity bit
+      digitalWriteFast(_dataPin, ps2Parity);    // send parity bit
     }
     break;
   }
@@ -412,7 +412,7 @@ void ps2Interrupt(void)
       pinMode(_dataPin, INPUT_PULLUP);
       #else
       pinMode(_dataPin, INPUT);
-      pinSet(_dataPin, HIGH);
+      digitalWriteFast(_dataPin, HIGH);
       #endif
     }
     break;
@@ -435,7 +435,7 @@ void ps2Interrupt(void)
     pinMode(_dataPin, INPUT_PULLUP);
     #else
     pinMode(_dataPin, INPUT);
-    pinSet(_dataPin, HIGH);
+    digitalWriteFast(_dataPin, HIGH);
     #endif
     break;
   }

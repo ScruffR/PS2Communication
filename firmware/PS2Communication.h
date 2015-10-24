@@ -30,16 +30,25 @@
 #define PS2Communication_h
 
 #if defined(SPARK)
-
 #include "application.h"
 
 // some very useful macros for Spark Core and porting Arduino libraries for it
 
-// fast pin access
-#define pinLO(_pin)	                       (PIN_MAP[_pin].gpio_peripheral->BRR = PIN_MAP[_pin].gpio_pin)
-#define pinHI(_pin)	                       (PIN_MAP[_pin].gpio_peripheral->BSRR = PIN_MAP[_pin].gpio_pin)
-#define pinSet(_pin, _hilo)                (_hilo ? pinHI(_pin) : pinLO(_pin))
-#define pinGet(_pin)                       (PIN_MAP[_pin].gpio_peripheral->IDR & PIN_MAP[_pin].gpio_pin ? 0xFF : LOW)
+#if (SYSTEM_VERSION < 0x00040400) // no fast pin functions before 0.4.4
+ #if defined(STM32F2XX)  // for the Photon and friends
+  STM32_Pin_Info* PIN_MAP_= HAL_Pin_Map();
+  #define pinResetFast(_pin)	               (PIN_MAP_[_pin].gpio_peripheral->BSRRH = PIN_MAP_[_pin].gpio_pin)
+  #define pinSetFast(_pin)	                 (PIN_MAP_[_pin].gpio_peripheral->BSRRL = PIN_MAP_[_pin].gpio_pin)
+ #elif (STM32F10X)  // for the Core
+  STM32_Pin_Info* PIN_MAP_ = PIN_MAP[_pin];
+  #define pinResetFast(_pin)	               (PIN_MAP_[_pin].gpio_peripheral->BRR = PIN_MAP_[_pin].gpio_pin)
+  #define pinSetFast(_pin)	                 (PIN_MAP_[_pin].gpio_peripheral->BSRR = PIN_MAP_[_pin].gpio_pin)
+ #endif
+ #define digitalWriteFast(_pin, _hilo)      (_hilo ? pinSetFast(_pin) : pinResetFast(_pin))
+ #define pinReadFast(_pin)                  (PIN_MAP_[_pin].gpio_peripheral->IDR & PIN_MAP_[_pin].gpio_pin ? 0xFF : LOW)
+ #define digitalPinToBitMask(_pin)          (PIN_MAP_[_pin].gpio_pin)
+ #define digitalPinToPort(_pin)             (PIN_MAP_[_pin].gpio_peripheral)
+#endif
 
 // even faster port based multi pin access
 #define portSet(_port, _word)              (_port->ODR = _word)
@@ -50,20 +59,21 @@
 #define pgm_read_byte_near(_addr)          (pgm_read_byte(_addr))
 #define pgm_read_word(_addr)               (*(const uint16_t *)(_addr))
 #define pgm_read_word_near(_addr)          (pgm_read_word(_addr))
-#define digitalPinToBitMask(_pin)          (PIN_MAP[_pin].gpio_pin)
-#define digitalPinToPort(_pin)             (PIN_MAP[_pin].gpio_peripheral)
 #define portInputRegister(_port)           (_port->IDR)
 #define portOutputRegister(_port)          (_port->ODR)
-#define cbi(_pin)                          pinLO(_pin)
-#define sbi(_pin)                          pinHI(_pin)
+#define cbi(_pin)                          pinResetFast(_pin)
+#define sbi(_pin)                          pinSetFast(_pin)
 #define bitRead(_val, _bit)                (_val & (1 << _bit))
 #define bitWrite(_dest, _bit, _src)        (_dest |= (_src ? (1 << _bit) : 0))
 
 // default values
 #define PS2_DATAPIN D0        // needs to be 5V toletant
-                              // D0, D1, D3, D4, D5, D6 and D7
+                              // on the Core   D0, D1, D3, D4, D5, D6 and D7
+                              // on the Photon all but A3 and A6/DAC
 #define PS2_CLKPIN  D1        // needs to be 5V tolerant & interrupt enabled
-                              // D0, D1, D3 and D4
+                              // on the Core   D0, D1, D3 and D4
+                              // on the Photon all but D0, A3, A5, A6/DAC and only one of 
+                              //     (D1,A4), (D2,A0,<A3>), (D3,<DAC>), (D4,A1) at a time
 
 // interrupt for PS/2 communication
 #define PS2_INTERRUPT PS2_CLKPIN
@@ -74,8 +84,8 @@
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define pinSet(_pin, _hilo)                digitalWrite(_pin, _hilo)
-#define pinGet(_pin)                       digitalRead(_pin)
+#define digitalWriteFast(_pin, _hilo)    digitalWrite(_pin, _hilo)
+#define pinReadFast(_pin)                digitalRead(_pin)
 
 // default PIN for pin change interrupt PCINT0
 //#define PS2_CLKPIN 3        // for arduino

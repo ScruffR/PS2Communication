@@ -406,7 +406,7 @@ void ps2ProcessMouseReport()
   int8_t   mZ      = 0x00;
   char     cB45    = ' ';  // place holder for button 4 & 5 if available
 
-  pinHI(D7);
+  pinSetFast(D7);
 
   // see http://www.computer-engineering.org/ps2mouse/
   mState = PS2->read() & 0x3F;  // don't care for carry flags
@@ -481,7 +481,7 @@ void ps2ProcessMouseReport()
   }
 #endif
 
-  pinLO(D7);
+  pinResetFast(D7);
 }
 
 // -------------              Spark.functions              -------------
@@ -555,11 +555,15 @@ void doDebugging()
     {                        // enter dfu
       Serial.println("Disconnect serial monitor - prepare for DFU");
       delay(5000);           // give us some time to close serial monitor
-      FLASH_OTA_Update_SysFlag = 0x0000;
-      Save_SystemFlags();
-      BKP_WriteBackupRegister(BKP_DR10, 0x0000);
-      USB_Cable_Config(DISABLE);
-      NVIC_SystemReset();
+      #if (PLATFORM_ID == 0) && (SYSTEM_VERSION < 0x00040400)
+       FLASH_OTA_Update_SysFlag = 0x0000;
+       Save_SystemFlags();
+       BKP_WriteBackupRegister(BKP_DR10, 0x0000);
+       USB_Cable_Config(DISABLE);
+       NVIC_SystemReset();
+      #elif (SYSTEM_VERSION >= 0x00040400)
+       System.dfu();
+      #endif
     }
 
     echoByte = strtol(echo, NULL, 16);
