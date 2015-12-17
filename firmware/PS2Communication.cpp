@@ -1,4 +1,4 @@
-/*
+﻿/*
   PS2Communication.h - PS2Communication library
   Copyright (c) 2009 Free Software Foundation.  All right reserved.
   Rewritten for interrupt and ported for Spark Core
@@ -78,7 +78,7 @@ void PS2Communication::reset()
   PS2Communication::suspend();
   PS2Communication::setPin(_dataPin, LOW);
   PS2Communication::flush();
-  delayMicroseconds(10000);             // long enough for a reset?
+  delayMicroseconds(100000);             // 100ms should suffice
   PS2Communication::setPin(_dataPin, HIGH);
   PS2Communication::resume();
   PS2Communication::write(0xFF);
