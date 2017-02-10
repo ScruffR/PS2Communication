@@ -58,7 +58,7 @@ PS2Communication::PS2Communication(uint8_t dataPin,
   // initialize class variables
   _dataPin      = dataPin;
   _clkPin       = clkPin;
-#if defined(SPARK)
+#if defined(PARTICLE)
   _clkInterrupt = clkPin;
 #else
   _clkInterrupt = clkInterrupt;
@@ -162,7 +162,7 @@ inline void PS2Communication::setPin(int pin, uint8_t state)
 {
   if (state)
   {
-#if defined(SPARK)
+#if defined(PARTICLE)
     pinMode(pin, INPUT_PULLUP);
 #else
     pinMode(pin, INPUT);
@@ -312,133 +312,3 @@ void ps2DeviceToHostCommunication(void)
   }
   ps2BitPos++;
 }
-
-/* superceded by dedicated ISR depending on direction
-volatile uint8_t  ps2InByte;        // first version vars (can go as soon as ps2Interrupt is not needed anymore)
-volatile uint8_t  ps2Parity;        //  --"--
-volatile uint16_t inByte, outByte;  //  --"--
-
-void PS2Communication::ps2FirstRising(void)
-{
-  ps2BitPos = 0;
-  attachInterrupt(_clkInterrupt, ps2Direction == DEV2HOST ? ps2DeviceToHostCommunication : ps2HostToDeviceCommunication, FALLING);
-}
-
-// The ISR for the PS/2 clock falling edge
-void ps2Interrupt(void)
-{
-  uint8_t bit;
-
-  switch (ps2BitPos)
-  {
-  case 0:   // startbit
-    break;
-  case 1:   // 8 databits
-    ps2Parity = 0xFF;       // preset parity flag
-    if (ps2Direction == HOST2DEV)
-    {
-      pinMode(_dataPin, OUTPUT);
-      outByte = 0x8000;
-    }
-    else
-    {
-      ps2InByte = 0;
-      inByte = 0x8000;
-    }
-  case 2:
-  case 3:
-  case 4:
-  case 5:
-  case 6:
-  case 7:
-  case 8:
-  {
-    if (ps2Direction == DEV2HOST)
-    {
-      if (bit = digitalRead(_dataPin))
-      {
-        ps2InByte |= (0x01 << (ps2BitPos - 1));
-        ps2Parity = ~ps2Parity;
-        inByte |= (0x01 << (ps2BitPos - 1));
-        inByte ^= 0x8000;
-      }
-    }
-    else //if (ps2Direction == HOST2DEV)
-    {
-      if (ps2OutByte & (0x01 << (ps2BitPos - 1)))
-      {
-        digitalWriteFast(_dataPin, HIGH);
-        ps2Parity = ~ps2Parity;
-        outByte |= (0x01 << (ps2BitPos - 1));
-      }
-      else
-      {
-        digitalWriteFast(_dataPin, LOW);
-        outByte &= ~(0x01 << (ps2BitPos - 1));
-      }
-    }
-
-    break;
-  }
-  case 9:   // parity
-  {
-    if (ps2Direction == DEV2HOST)
-    {
-      inByte |= (ps2Parity << 15);
-      ps2Parity ^= digitalRead(_dataPin);   // if parity bit does meet the expectation ps2Parity is cleared
-    }
-    else //if (ps2Direction == HOST2DEV)
-    {
-      outByte |= (ps2Parity << 14);
-      digitalWriteFast(_dataPin, ps2Parity);    // send parity bit
-    }
-    break;
-  }
-  case 10:  // stopbit
-  {
-    if (ps2Direction == DEV2HOST)
-    {
-      if (ps2InBufferHead && ps2InBufferTail == ps2InBufferHead)
-        ps2InBufferTail = ps2InBufferHead = 0;
-
-      //        if (!ps2Parity)
-      ps2InBuffer[ps2InBufferHead++] = ps2InByte;
-
-      ps2BitPos = -1;
-    }
-    else //if (ps2Direction == HOST2DEV)
-    {
-      #if defined(SPARK)
-      pinMode(_dataPin, INPUT_PULLUP);
-      #else
-      pinMode(_dataPin, INPUT);
-      digitalWriteFast(_dataPin, HIGH);
-      #endif
-    }
-    break;
-  }
-  case 11: // only for HOST2DEV: acknowledge sent by device
-  {
-    //      if (digitalRead(_dataPin) == LOW)      // if sent byte is acknowledged remove it from the buffer
-    //        ps2OutByte = 0;
-
-    ps2BitPos = -1;
-    ps2Direction = DEV2HOST;                // allow device to host communication again (e.g. for command result transfer)
-    break;
-  }
-  default:
-    ps2OutByte =
-      ps2InByte = 0;
-    ps2BitPos = -1;
-    ps2Direction = DEV2HOST;                // allow device to host communication again (e.g. for command result transfer)
-    #if defined(SPARK)
-    pinMode(_dataPin, INPUT_PULLUP);
-    #else
-    pinMode(_dataPin, INPUT);
-    digitalWriteFast(_dataPin, HIGH);
-    #endif
-    break;
-  }
-  ps2BitPos++;
-}
-*/

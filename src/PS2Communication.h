@@ -29,8 +29,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #ifndef PS2Communication_h
 #define PS2Communication_h
 
-#if defined(SPARK)
-#include "application.h"
+#if defined(PARTICLE)
+#include "Particle.h"
 
 // some very useful macros for Spark Core and porting Arduino libraries for it
 
@@ -49,16 +49,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #endif
 
 // even faster port based multi pin access
-#define portSet(_port, _word)              (_port->ODR = _word)
-#define portSetMasked(_port, _word, _mask) (_port->BSRR = (_mask << 16) | (_word & _mask))
+//#define portSet(_port, _word)              (_port->ODR = _word)
+//#define portSetMasked(_port, _word, _mask) (_port->BSRR = (_mask << 16) | (_word & _mask))
 
 // Arduino porting/replacement macros
-#define pgm_read_byte(_addr)               (*(const uint8_t *)(_addr))
-#define pgm_read_byte_near(_addr)          (pgm_read_byte(_addr))
-#define pgm_read_word(_addr)               (*(const uint16_t *)(_addr))
-#define pgm_read_word_near(_addr)          (pgm_read_word(_addr))
-#define portInputRegister(_port)           (_port->IDR)
-#define portOutputRegister(_port)          (_port->ODR)
+//#define pgm_read_byte(_addr)               (*(const uint8_t *)(_addr))
+//#define pgm_read_byte_near(_addr)          (pgm_read_byte(_addr))
+//#define pgm_read_word(_addr)               (*(const uint16_t *)(_addr))
+//#define pgm_read_word_near(_addr)          (pgm_read_word(_addr))
+//#define portInputRegister(_port)           (_port->IDR)
+//#define portOutputRegister(_port)          (_port->ODR)
 #define cbi(_pin)                          pinResetFast(_pin)
 #define sbi(_pin)                          pinSetFast(_pin)
 #define bitRead(_val, _bit)                (_val & (1 << _bit))
@@ -129,7 +129,7 @@ public:
   //   of which D0, D1, D3 and D4 also support HW interrupts
   //   with level shifting all GPIO pins can be used for data and
   //   D0, D1, D2, D3, D4, A0, A1, A3, A4, A5, A6 and A7 for clock
-#if defined(SPARK)
+#if defined(PARTICLE)
   PS2Communication(uint8_t dataPin = PS2_DATAPIN,
     uint8_t clkPin = PS2_CLKPIN);
 #else

@@ -1,10 +1,10 @@
-/*
+﻿/*
 PS2Mouse.cpp - read PS/2 mouse input (interrupt driven)
 Copyright (c) 2009 Andreas Rothenwänder.  All right reserved.
 Written by Andreas Rothenwänder (aka ScruffR)
 
 This firmware reads PS/2 mouse reports and forwards that information via
-Serial output and passes out cummulated values as Spark.variables
+Serial output and passes out cummulated values as Particle.variables
 
 This library is free software; you can redistribute it and/or
 modify it under the terms of the GNU Lesser General Public
@@ -21,21 +21,24 @@ License along with this library; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 #pragma SPARK_NO_PREPROCESSOR
-#include "application.h"
+#include "Particle.h"
 
 SYSTEM_MODE(SEMI_AUTOMATIC); // cloud connect with L/M/R button pressed at once
 
-#define SPARK_WEB_IDE      // this would be nice to be provided by Spark ;-)
-
-#if defined(SPARK_WEB_IDE)
-#include "PS2Communication/PS2Communication.h"
-#else
-#define noSPARK_USB_MOUSE    // this should be defined externally in USB HID mode
 #include "PS2Communication.h"
-#endif
 
+#define USB_MOUSE
 #define DEBUG_PS2
 #define DEBUG_DO_MOUSE
+
+#if (PLATFORM_ID != PLATFORM_PHOTON_PRODUCTION) && (PLATFORM_ID != PLATFORM_ELECTRON_PRODUCTION)
+#undef USB_MOUSE
+#endif
+#if defined(USB_MOUSE)
+#undef DEBUG_PS2
+#undef DEBUG_DO_MOUSE
+#endif
+
 
 #define REPEATTIME     25
 
@@ -75,7 +78,7 @@ PS2Communication* PS2 = NULL;
 int8_t     ps2DeviceID = mmReset;
 MouseModes ps2MouseMode = mmReset;
 
-// mouse values for Spark.variables
+// mouse values for Particle.variables
 char    mouseB[] = "_lmr_";
 uint8_t lastMouseState = 0x00;
 int     mouseX = 0x00;
@@ -91,7 +94,7 @@ MouseModes ps2MouseInit(MouseModes Mode = mmDefault
 void ps2MouseRead();
 void ps2ProcessMouseReport();
 
-int  mouseReset(String cmd);  // Spark.function
+int  mouseReset(String cmd);  // Particle.function
 void connectCloud();
 
 inline void dumpACK();
@@ -105,28 +108,27 @@ void setup()
 
   pinMode(D7, OUTPUT);
 
-  Spark.variable("MouseButtons", mouseB, STRING);
-  Spark.variable("MouseX", &mouseX, INT);
-  Spark.variable("MouseY", &mouseY, INT);
-  Spark.variable("MouseZ", &mouseZ, INT);
-
-  Spark.function("MouseReset", mouseReset);
+  Particle.variable("MouseButtons", mouseB);
+  Particle.variable("MouseX", mouseX);
+  Particle.variable("MouseY", mouseY);
+  Particle.variable("MouseZ", mouseZ);
+  
+  Particle.function("MouseReset", mouseReset);
 
 #if defined(DEBUG_PS2) || defined(DEBUG_DO_MOUSE)
   Serial.begin(115200);
   while (!Serial.available() && millis() < 5000)
-    SPARK_WLAN_Loop();
-  while (Serial.available())
-    Serial.read();
+    Particle.process();
+  while (Serial.read() >= 0);  // flush RX buffer
 #else
   delay(2000); // time for PS/2 mouse to settle in
 #endif
 
-#if defined(SPARK_USB_MOUSE)
+#if defined(USB_MOUSE)
   Mouse.begin();
 #endif
 
-  // dataPin D0, clkPin D1
+  // dataPin D0 (USB cable white) , clkPin D1 (USB cable green)
   PS2 = new PS2Communication(D0, D1);
 
   if ((ps2MouseMode = ps2MouseInit(mmDefault)) != mmDefault)
@@ -400,7 +402,7 @@ void ps2ProcessMouseReport()
   }
 #endif
 
-#if defined(SPARK_USB_MOUSE)
+#if defined(USB_MOUSE)
   // with USB_HID_Mouse this could be passed on to a computer
   if (mX || mY || (mZ & 0x0F))
     Mouse.move(mX, -mY, -mZ);
@@ -424,7 +426,7 @@ void ps2ProcessMouseReport()
   pinResetFast(D7);
 }
 
-// -------------              Spark.functions              -------------
+// -------------              Particle.function              -------------
 
 int mouseReset(String cmd)
 {
@@ -439,10 +441,10 @@ int mouseReset(String cmd)
 
 void connectCloud()
 {
-  if (!Spark.connected())
+  if (!Particle.connected())
   {
     PS2->suspend();
-    Spark.connect();
+    Particle.connect();
   }
   mouseReset(NULL);
   ps2MouseMode = ps2MouseInit(ps2MouseMode);
@@ -490,7 +492,7 @@ void doDebugging()
     Serial.println("-----");
     echoLen = 0;
 
-    // Spark.connect()
+    // Particle.connect()
     if (echo[0] == 'S' || echo[0] == 's')
     {
       connectCloud();
