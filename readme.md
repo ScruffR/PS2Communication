@@ -1,7 +1,7 @@
   PS2Communication.h - PS2Communication library
   Copyright (c) 2009 Free Software Foundation.  All right reserved.
-  Rewritten for interrupt and ported for Spark Core
-  by Andreas Rothenwänder (aka ScruffR)
+  Rewritten for interrupt and ported for Spark Core and Particle.io devices
+  like Photon and Electron by Andreas Rothenwänder (aka ScruffR)
   based on some non-interrupt library from pjrc.com (Paul Stoffregen)
 
   This library provides the basic PS/2 communication framework for
