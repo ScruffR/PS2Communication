@@ -63,9 +63,6 @@ PS2Communication::PS2Communication(uint8_t dataPin,
 #else
   _clkInterrupt = clkInterrupt;
 #endif
-
-  // initialize the pins
-  PS2Communication::reset();
 }
 
 void PS2Communication::begin()
